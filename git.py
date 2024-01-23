@@ -14,6 +14,9 @@ MOUNTED_PATH_PREFIX = "/System/Volumes/Data/net/192.168.1.20"
 TEMP_FOLDER_PREFIX = "/var/folders"
 
 
+FORCE_LOCAL_KEYWORDS = ("rebase",)
+
+
 def isascii(s):
     return len(s) == len(s.encode())
 
@@ -52,10 +55,8 @@ def run_remmote_git(pwd, args):
     git_cmd = f"cd {pwd}; {REMOTE_GIT} {git_args}"
 
     cmd = ["ssh", HOST, git_cmd]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE)
-    result_stdout_str = result.stdout.decode()
-    sys.stdout.write(result_stdout_str)
-    sys.stdout.flush()
+    result = subprocess.run(cmd, stdout=sys.stdout, stdin=sys.stdin, stderr=sys.stderr)
+    return result.returncode
 
 
 def run_local_git(args):
@@ -64,15 +65,25 @@ def run_local_git(args):
             LOCAL_GIT,
             *args,
         ],
-        stdout=subprocess.PIPE,
+        stdout=sys.stdout,
+        stdin=sys.stdin,
+        stderr=sys.stderr,
     )
-    sys.stdout.write(result.stdout.decode())
-    sys.stdout.flush()
+    return result.returncode
+
+
+def force_local(argv: list[str]) -> bool:
+    for keyword in FORCE_LOCAL_KEYWORDS:
+        for arg in argv:
+            if keyword in argv:
+                return True
+    return False
 
 
 if __name__ == "__main__":
     pwd = getcwd()
-    if pwd.startswith(MOUNTED_PATH_PREFIX):
-        run_remmote_git(pwd, sys.argv[1:])
+    if pwd.startswith(MOUNTED_PATH_PREFIX) and not force_local(sys.argv[1:]):
+        returncode = run_remmote_git(pwd, sys.argv[1:])
     else:
-        run_local_git(sys.argv[1:])
+        returncode = run_local_git(sys.argv[1:])
+    sys.exit(returncode)
